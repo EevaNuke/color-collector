@@ -11,6 +11,11 @@ function color(value) {
 	};
 }
 
+function recurScore(i) {
+	if(i>0) return (i*5+recurScore(i-1));
+	else return 0;
+}
+
 function Gem(props) {
 	return (
 		<button className={'square '+color(props.value)} onClick={props.onClick}>
@@ -71,14 +76,52 @@ class Game extends React.Component {
 			history: [
 				{
 					squares: this.generateBoard(rows*cols), 
+					score: 0,
+					gemsCollected: [0, 0, 0, 0, 0],
 				}
 			],
 			stepNumber: 0,
-			movesLeft: 10,
-			score: 0,
+			movesLeft: 100,
 		};
 	}
-
+	
+	removeConnected(squares, row, col, gemNo) {			// removes all connected gems of the same color
+		//set yourself as 0
+		const me = squares[gemNo];
+		let gemNumber = 1;
+		squares[gemNo] = 0;
+		
+		//check upper one
+		//if it has the same number, removeConnected(it)
+		if(row>0 && squares[gemNo-this.state.cols]==me) {
+			gemNumber += this.removeConnected(squares, (row-1), col, (gemNo-this.state.cols));
+		}
+		
+		//remove yourself, fall column
+		for(let i=row; i>0; i--) {
+			squares[i*this.state.cols+col] = squares[(i-1)*this.state.cols+col];		// fall gems
+		}
+		squares[col] = Math.floor((Math.random()*4)+1);		// new gem
+		
+		//check sides
+		//if they have the same number, removeConnected(them)
+		if(col>0 && squares[gemNo-1]==me) {
+			gemNumber += this.removeConnected(squares, row, (col-1), (gemNo-1));
+		}
+		if(col<(this.state.cols-1) && squares[gemNo+1]==me) {
+			gemNumber += this.removeConnected(squares, row, (col+1), (gemNo+1));
+		}
+		
+		//check bottom one
+		//if it has the same number, removeConnected(it)
+		if(row<(this.state.rows-1) && squares[gemNo+this.state.cols]==me) {
+			gemNumber += this.removeConnected(squares, (row+1), col, (gemNo+this.state.cols));
+		}
+		
+		//return true
+		return gemNumber;
+	}
+	
 	handleClick(gemNo) {
 		const history = this.state.history.slice(0, this.state.stepNumber + 1);
 		const current = history[history.length - 1];
@@ -88,25 +131,28 @@ class Game extends React.Component {
 		
 		//remove gem, add score, fall gems
 		const col = gemNo % this.state.cols;
-		const row = Math.floor(gemNo/this.state.cols);	
+		const row = Math.floor(gemNo/this.state.cols);
 		
-		for(let i=row; i>0; i--) {
-			squares[i*this.state.cols+col] = squares[(i-1)*this.state.cols+col];
-		}
-		squares[col] = 0;
+		const color = squares[gemNo];
+		const gemsRemoved = this.removeConnected(squares, row, col, gemNo);
 		
-		const newScore = this.state.score+1;
+		const newGemsCollected = current.gemsCollected;
+		newGemsCollected[0] += gemsRemoved;				// add total gems collected
+		newGemsCollected[color] += gemsRemoved;			// add color gems collected
+		
+		const newScore = current.score+recurScore(gemsRemoved);
 		
 		//save move
 		this.setState({
 			history: history.concat([
 				{
 					squares: squares,
+					score: newScore,
+					gemsCollected: newGemsCollected,
 				}
 			]),
 			stepNumber: history.length,
 			movesLeft: this.state.movesLeft-1,
-			score: newScore
 		});
 	}
 
@@ -114,10 +160,10 @@ class Game extends React.Component {
 		const history = this.state.history;
 		const current = history[this.state.stepNumber];
 		
-		const score = "Score: "+this.state.score;
+		const score = "Score: "+current.score;
 		let movesLeft = this.state.movesLeft;
 		if(movesLeft>0) {
-			movesLeft = "Moves: "+this.state.movesLeft;
+			movesLeft = "Moves left: "+this.state.movesLeft;
 		} else {
 			movesLeft = "No more moves! The end.";
 		}
@@ -126,7 +172,18 @@ class Game extends React.Component {
 			<div className="game">
 				<div className="game-info">
 					<div>{score}</div>
-					<div>{movesLeft}</div>
+					<div className="moves-left">{movesLeft}</div>
+					<div className="gems-collected">
+						Gems collected:
+						<table>
+							<tr><td> Red: </td><td> {current.gemsCollected[1]} </td></tr>
+							<tr><td> Green: </td><td> {current.gemsCollected[2]} </td></tr>
+							<tr><td> Blue: </td><td> {current.gemsCollected[3]} </td></tr>
+							<tr><td> Yellow: </td><td> {current.gemsCollected[4]} </td></tr>
+							<tr className="line"><td colspan="2"><hr/></td></tr>
+							<tr><td> Total: </td><td> {current.gemsCollected[0]} </td></tr>
+						</table>
+					</div>
 				</div>
 				<div className="game-board">
 					<Board
@@ -145,22 +202,3 @@ class Game extends React.Component {
 
 ReactDOM.render(<Game />, document.getElementById("root"));
 
-function calculateWinner(squares) {
-	const lines = [
-		[0, 1, 2],
-		[3, 4, 5],
-		[6, 7, 8],
-		[0, 3, 6],
-		[1, 4, 7],
-		[2, 5, 8],
-		[0, 4, 8],
-		[2, 4, 6]
-	];
-	for (let i = 0; i < lines.length; i++) {
-		const [a, b, c] = lines[i];
-		if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-			return squares[a];
-		}
-	}
-	return null;
-}
